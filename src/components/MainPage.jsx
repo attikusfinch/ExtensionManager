@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { TonClient, Address } from '@ton/ton';
+import { createRemovePluginExternalMessage, sendExternalMessage } from '../utils/externalMessage';
 import './MainPage.css';
 
 export const MainPage = () => {
-    const [address, setAddress] = useState('UQCQKEJl-yQU6Ly2JN0OGiUCM3wdL20KrwOy6bbH3Pya5WhP');
-    const [pluginList, setPluginList] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+  const [address, setAddress] = useState('UQCQKEJl-yQU6Ly2JN0OGiUCM3wdL20KrwOy6bbH3Pya5WhP');
+  const [pluginList, setPluginList] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [mnemonic, setMnemonic] = useState('');
+  const [showMnemonicInput, setShowMnemonicInput] = useState(false);
+  const [selectedPlugin, setSelectedPlugin] = useState(null);
 
     const fetchPlugins = async () => {
         if (!address.trim()) {
@@ -151,10 +155,52 @@ export const MainPage = () => {
             setError(err.message || 'Не удалось получить список плагинов');
         } finally {
             setLoading(false);
-        }
-    };
+    }
+  };
 
-    return (
+  const handleRemovePlugin = async (plugin) => {
+    setSelectedPlugin(plugin);
+    setShowMnemonicInput(true);
+  };
+
+  const confirmRemovePlugin = async () => {
+    if (!mnemonic.trim()) {
+      alert('Введите seed фразу');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      console.log('🗑️ Удаление плагина:', selectedPlugin.friendlyAddress);
+      
+      const boc = await createRemovePluginExternalMessage(
+        mnemonic.trim(),
+        address,
+        selectedPlugin.friendlyAddress
+      );
+      
+      const result = await sendExternalMessage(boc);
+      
+      alert('✅ Плагин успешно удален!\n\nОбновите список через несколько секунд.');
+      
+      setShowMnemonicInput(false);
+      setMnemonic('');
+      setSelectedPlugin(null);
+      
+      // Обновляем список через 3 секунды
+      setTimeout(() => {
+        fetchPlugins();
+      }, 3000);
+      
+    } catch (err) {
+      console.error('❌ Ошибка удаления:', err);
+      alert('Ошибка: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
         <div className="main-container">
             <div className="header">
                 <div className="logo">
@@ -251,19 +297,86 @@ export const MainPage = () => {
                                                     <label>Hash:</label>
                                                     <code style={{ fontSize: '0.75rem' }}>{plugin.addressHash}</code>
                                                 </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                      </div>
                     </div>
-                </div>
-            </div>
-
-            <footer className="footer">
-                <p>Сделано <a href="https://t.me/fiscaldev" target="_blank" rel="noopener noreferrer">@fiscaldev</a></p>
-            </footer>
+                    <button 
+                      className="remove-plugin-btn"
+                      onClick={() => handleRemovePlugin(plugin)}
+                      disabled={loading}
+                      title="Удалить плагин"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-    );
+      </div>
+
+      {/* Модальное окно для ввода seed фразы */}
+      {showMnemonicInput && selectedPlugin && (
+        <div className="modal-overlay" onClick={() => setShowMnemonicInput(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>🗑️ Удаление плагина</h3>
+              <button 
+                className="modal-close"
+                onClick={() => {
+                  setShowMnemonicInput(false);
+                  setMnemonic('');
+                  setSelectedPlugin(null);
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="modal-description">
+                Плагин: <code>{selectedPlugin.friendlyAddress}</code>
+              </p>
+              <label>Seed фраза (24 слова):</label>
+              <textarea
+                className="mnemonic-input"
+                placeholder="word1 word2 word3 ..."
+                value={mnemonic}
+                onChange={(e) => setMnemonic(e.target.value)}
+                disabled={loading}
+                rows="3"
+              />
+              <div className="modal-info">
+                <p>⚠️ Seed фраза не сохраняется и используется только для подписи</p>
+                <p>🔐 Будет создано и отправлено external message с op=3</p>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="modal-btn cancel"
+                onClick={() => {
+                  setShowMnemonicInput(false);
+                  setMnemonic('');
+                  setSelectedPlugin(null);
+                }}
+                disabled={loading}
+              >
+                Отмена
+              </button>
+              <button 
+                className="modal-btn confirm"
+                onClick={confirmRemovePlugin}
+                disabled={loading || !mnemonic.trim()}
+              >
+                {loading ? 'Удаление...' : '🗑️ Удалить плагин'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <footer className="footer">
+        <p>Сделано <a href="https://t.me/fiscaldev" target="_blank" rel="noopener noreferrer">@fiscaldev</a></p>
+      </footer>
+    </div>
+  );
 };
