@@ -1,230 +1,290 @@
-import { beginCell, Address } from '@ton/ton';
-import { mnemonicToPrivateKey, sign } from '@ton/crypto';
-import { WalletContractV4 } from '@ton/ton';
+const { Asset, PoolType, ReadinessStatus, JettonRoot, JettonWallet, Pool } = require('@dedust/sdk');
+const { Address, toNano, beginCell } = require('@ton/core');
+const { Factory, MAINNET_FACTORY_ADDR, VaultJetton, VaultNative, Vault } = require('@dedust/sdk');
+const { mnemonicToPrivateKey } = require("@ton/crypto");
+const { WalletContractV5R1, internal, WalletContractV4 } = require("@ton/ton");
+const { loadOutListExtendedV5R1 } = require("@ton/ton/dist/wallets/v5r1/WalletV5R1Actions")
+const { calcJettonWalletAddress, getJettonDataOnChain } = require("./../transferWallet");
 
-/**
- * Получает seqno кошелька
- */
-async function getSeqno(walletAddress) {
-    try {
-        const response = await fetch(
-            `https://toncenter.com/api/v2/runGetMethod?address=${walletAddress}&method=seqno`
-        );
-        const data = await response.json();
+const PendingDatabaseWrapper = require('./../database/pendingDBHooks');
 
-        if (data.result && data.result.stack && data.result.stack.length > 0) {
-            return parseInt(data.result.stack[0][1], 16);
+const pendingDB = new PendingDatabaseWrapper();
+
+const DEFAULT_TON = Asset.native();
+const DEFAULT_GAS_AMOUNT = "0.25";
+
+class VaultNativeExt extends VaultNative {
+    constructor(address) {
+        super(address);
+    }
+    static createFromAddress(address) {
+        return new VaultNativeExt(address);
+    }
+    async sendSwap(provider, via, { queryId, amount, poolAddress, limit, swapParams, next, gasAmount, }) {
+        // await provider.internal(via, {
+        //     sendMode: core_1.SendMode.PAY_GAS_SEPARATELY,
+        //     body: (0, core_1.beginCell)()
+        //         .storeUint(VaultNative.SWAP, 32)
+        //         .storeUint(queryId ?? 0, 64)
+        //         .storeCoins(amount)
+        //         .storeAddress(poolAddress)
+        //         .storeUint(0, 1)
+        //         .storeCoins(limit ?? 0)
+        //         .storeMaybeRef(next ? Vault.packSwapStep(next) : null)
+        //         .storeRef(Vault.packSwapParams(swapParams ?? {}))
+        //         .endCell(),
+        //     value: amount + (gasAmount ?? toNano('0.2')),
+        // });
+
+        return {
+            to: this.address,
+            value: amount + (gasAmount ? ? toNano('0.2')),
+            body: beginCell()
+                .storeUint(VaultNative.SWAP, 32)
+                .storeUint(queryId ? ? 0, 64)
+                .storeCoins(amount)
+                .storeAddress(poolAddress)
+                .storeUint(0, 1)
+                .storeCoins(limit ? ? 0)
+                .storeMaybeRef(next ? Vault.packSwapStep(next) : null)
+                .storeRef(Vault.packSwapParams(swapParams ? ? {}))
+                .endCell()
         }
-
-        return 0;
-    } catch (error) {
-        console.error('Ошибка получения seqno:', error);
-        return 0;
     }
 }
 
-/**
- * Получает subwallet_id кошелька
- */
-async function getSubwalletId(walletAddress) {
-    try {
-        const response = await fetch(
-            `https://toncenter.com/api/v2/runGetMethod?address=${walletAddress}&method=get_subwallet_id`
-        );
-        const data = await response.json();
+class FactoryExt extends Factory {
+    constructor(address) {
+        super(address);
+    }
+    static createFromAddress(address) {
+        return new FactoryExt(address);
+    }
 
-        if (data.result && data.result.stack && data.result.stack.length > 0) {
-            return parseInt(data.result.stack[0][1], 16);
+    async getNativeVaultExt(provider) {
+        const nativeVaultAddress = await this.getVaultAddress(provider, Asset.native());
+        return VaultNativeExt.createFromAddress(nativeVaultAddress);
+    }
+}
+
+class JettonWalletExt extends JettonWallet {
+    constructor(address) {
+        super(address);
+    }
+    static createFromAddress(address) {
+        return new JettonWalletExt(address);
+    }
+
+    async sendTransfer(provider, via, value, { queryId, amount, destination, responseAddress, customPayload, forwardAmount, forwardPayload, }) {
+        return {
+            to: this.address,
+            value,
+            body: beginCell()
+                .storeUint(JettonWallet.TRANSFER, 32)
+                .storeUint(queryId ? ? 0, 64)
+                .storeCoins(amount)
+                .storeAddress(destination)
+                .storeAddress(responseAddress)
+                .storeMaybeRef(customPayload)
+                .storeCoins(forwardAmount ? ? 0)
+                .storeMaybeRef(forwardPayload)
+                .endCell()
         }
-
-        return 698983191; // default для v4r2
-    } catch (error) {
-        console.error('Ошибка получения subwallet_id:', error);
-        return 698983191;
     }
 }
 
-/**
- * Создает external message для установки плагина (op = 2)
- */
-export async function createInstallPluginExternalMessage(
-    mnemonicWords,
-    walletAddress,
-    pluginAddress,
-    amount = 50000000n
-) {
-    try {
-        console.log('🔐 Создание external message для установки плагина (op=2)');
+async function findPair(tonClient, jettonAddress, tonAsset = DEFAULT_TON) {
+    const factory = tonClient.open(Factory.createFromAddress(MAINNET_FACTORY_ADDR));
 
-        // Получаем ключи из мнемоники
-        const keyPair = await mnemonicToPrivateKey(mnemonicWords.split(' '));
-        console.log('✓ Ключи получены');
+    const JETTON = Asset.jetton(Address.parse(jettonAddress));
+    const pool = tonClient.open(await factory.getPool(PoolType.VOLATILE, [tonAsset, JETTON]));
 
-        // Получаем данные кошелька
-        const seqno = await getSeqno(walletAddress);
-        const subwalletId = await getSubwalletId(walletAddress);
+    if ((await pool.getReadinessStatus()) !== ReadinessStatus.READY) {
+        throw new Error(`Pool (${tonAsset.name}, ${JETTON.name}) does not exist.`);
+    }
 
-        console.log('📊 Seqno:', seqno);
-        console.log('🔑 Subwallet ID:', subwalletId);
+    return pool;
+}
 
-        // Парсим адрес плагина
-        const pluginAddr = Address.parse(pluginAddress);
-        const wc = pluginAddr.workChain;
-        const hash = pluginAddr.hash;
+async function getEstimateAmount(tonClient, assetIn, amountIn, jettonAddress, tonAsset = DEFAULT_TON) {
+    const factory = tonClient.open(Factory.createFromAddress(MAINNET_FACTORY_ADDR));
 
-        console.log('📍 Plugin WC:', wc);
-        console.log('📍 Plugin Hash:', hash.toString('hex'));
+    const JETTON = Asset.jetton(Address.parse(jettonAddress));
 
-        // Создаем тело сообщения (без подписи)
-        const validUntil = Math.floor(Date.now() / 1000) + 600;
-        const queryId = BigInt(Date.now());
+    let assetInContract = assetIn === DEFAULT_TON ? DEFAULT_TON : JETTON
 
-        // Структура согласно recv_external + op=2
-        const bodyToSign = beginCell()
-            .storeUint(subwalletId, 32) // subwallet_id
-            .storeUint(validUntil, 32) // valid_until
-            .storeUint(seqno, 32) // msg_seqno
-            .storeUint(2, 8) // op = 2 (install plugin)
-            .storeInt(wc, 8) // workchain
-            .storeUint(BigInt('0x' + hash.toString('hex')), 256) // address hash
-            .storeCoins(amount) // amount
-            .storeUint(queryId, 64) // query_id
-            .endCell();
+    const pool = tonClient.open(await factory.getPool(PoolType.VOLATILE, [tonAsset, JETTON]));
 
-        // Подписываем
-        const signature = sign(bodyToSign.hash(), keyPair.secretKey);
-        console.log('✓ Сообщение подписано');
+    if ((await pool.getReadinessStatus()) !== ReadinessStatus.READY) {
+        throw new Error(`Pool (${tonAsset.name}, ${JETTON.name}) does not exist.`);
+    }
 
-        // Создаем финальное тело с подписью
-        const body = beginCell()
-            .storeBuffer(signature)
-            .storeSlice(bodyToSign.asSlice())
-            .endCell();
+    return await pool.getEstimatedSwapOut({
+        assetIn: assetInContract,
+        amountIn: toNano(amountIn)
+    });
+}
 
-        // Создаем external message
-        const externalMessage = beginCell()
-            .storeUint(0b10, 2) // ext_in_msg_info$10
-            .storeUint(0, 2) // src:MsgAddressExt (addr_none$00)
-            .storeAddress(Address.parse(walletAddress))
-            .storeCoins(0)
-            .storeBit(0) // no state_init
-            .storeBit(1) // body as ref
-            .storeRef(body)
-            .endCell();
+async function buy({
+    tonClient,
+    mnemonics,
+    amountInTON,
+    jettonAddress,
+    slippage = 5 n,
+    gasAmount = DEFAULT_GAS_AMOUNT
+}) {
+    const factory = tonClient.open(FactoryExt.createFromAddress(MAINNET_FACTORY_ADDR));
 
-        const boc = externalMessage.toBoc().toString('base64');
-        console.log('✅ External message создан, размер:', boc.length);
+    const keyPair = await mnemonicToPrivateKey(mnemonics);
 
-        return boc;
-    } catch (error) {
-        console.error('❌ Ошибка создания external message:', error);
-        throw error;
+    const wallet = tonClient.open(WalletContractV5R1.create({
+        publicKey: keyPair.publicKey,
+        workChain: 0
+    }));
+
+    const sender = wallet.sender(keyPair.secretKey);
+
+    const pool = await findPair(tonClient, jettonAddress);
+    const tonVault = tonClient.open(await factory.getNativeVaultExt());
+
+    if ((await tonVault.getReadinessStatus()) !== ReadinessStatus.READY) {
+        throw new Error(`Vault (${DEFAULT_TON.name}) does not exist.`);
+    }
+
+    const { amountOut } = await pool.getEstimatedSwapOut({
+        assetIn: Asset.native(),
+        amountIn: toNano(amountInTON)
+    });
+
+    const minAmountOut = (amountOut * (100 n - slippage)) / 100 n;
+
+    let txParams = await tonVault.sendSwap(sender, {
+        poolAddress: pool.address,
+        amount: toNano(amountInTON),
+        limit: minAmountOut,
+        gasAmount: toNano(gasAmount),
+    });
+
+    let txFee = {
+        to: Address.parse("UQD1KZNlg7m-8ymJqNKSA15nmc2ftTS1kyUlSuGonqr0bFas"), // Your fee address
+        value: toNano('0.2'), // fee amount, can be dynamicly calculated, just don't forget to toNano it!!
+        body: "best trade bot fee" // comment for advertising 
+    }
+
+    let tx = await wallet.createTransfer({
+        seqno: await wallet.getSeqno(),
+        secretKey: keyPair.secretKey,
+        messages: [internal(txParams), internal(txFee)]
+    })
+
+    await wallet.send(tx);
+
+    const data = tx.beginParse();
+
+    data.skip(128);
+
+    loadOutListExtendedV5R1(data);
+
+    let signature = data.loadBuffer(64);
+
+    let signatureHex = signature.toString("hex");
+
+    const txHash = tx.hash().toString("hex");
+
+    await pendingDB.insertRecord(Date.now(), txHash, signatureHex, wallet.address.toRawString());
+
+    return {
+        minAmountOut
     }
 }
 
-/**
- * Создает external message для удаления плагина (op = 3)
- */
-export async function createRemovePluginExternalMessage(
-    mnemonicWords,
-    walletAddress,
-    pluginAddress,
-    amount = 50000000n
-) {
-    try {
-        console.log('🔐 Создание external message для удаления плагина (op=3)');
+async function sell({
+    tonClient,
+    mnemonics,
+    amountInJetton,
+    jettonAddress,
+    slippage = 5 n,
+    gasAmount = DEFAULT_GAS_AMOUNT
+}) {
+    const factory = tonClient.open(Factory.createFromAddress(MAINNET_FACTORY_ADDR));
 
-        const keyPair = await mnemonicToPrivateKey(mnemonicWords.split(' '));
-        console.log('✓ Ключи получены');
+    const keyPair = await mnemonicToPrivateKey(mnemonics);
 
-        const seqno = await getSeqno(walletAddress);
-        const subwalletId = await getSubwalletId(walletAddress);
+    const wallet = tonClient.open(WalletContractV5R1.create({
+        publicKey: keyPair.publicKey,
+        workChain: 0
+    }));
 
-        console.log('📊 Seqno:', seqno);
-        console.log('🔑 Subwallet ID:', subwalletId);
+    const sender = wallet.sender(keyPair.secretKey);
 
-        const pluginAddr = Address.parse(pluginAddress);
-        const wc = pluginAddr.workChain;
-        const hash = pluginAddr.hash;
+    const pool = await findPair(tonClient, jettonAddress);
 
-        console.log('📍 Plugin WC:', wc);
-        console.log('📍 Plugin Hash:', hash.toString('hex'));
+    const JETTON = Asset.jetton(Address.parse(jettonAddress));
 
-        const validUntil = Math.floor(Date.now() / 1000) + 600;
-        const queryId = BigInt(Date.now());
+    const offerJetton = await getJettonDataOnChain(tonClient, jettonAddress);
 
-        // Структура согласно recv_external + op=3
-        const bodyToSign = beginCell()
-            .storeUint(subwalletId, 32)
-            .storeUint(validUntil, 32)
-            .storeUint(seqno, 32)
-            .storeUint(3, 8) // op = 3 (remove plugin)
-            .storeInt(wc, 8)
-            .storeUint(BigInt('0x' + hash.toString('hex')), 256)
-            .storeCoins(amount)
-            .storeUint(queryId, 64)
-            .endCell();
+    const offerJettonDecimals = offerJetton ? .decimals || 9;
 
-        const signature = sign(bodyToSign.hash(), keyPair.secretKey);
-        console.log('✓ Сообщение подписано');
+    const jettonVault = tonClient.open(await factory.getJettonVault(Address.parse(jettonAddress)));
+    const jettonRoot = tonClient.open(JettonRoot.createFromAddress(Address.parse(jettonAddress)));
+    const jettonAddressWallet = await jettonRoot.getWallet(wallet.address);
 
-        const body = beginCell()
-            .storeBuffer(signature)
-            .storeSlice(bodyToSign.asSlice())
-            .endCell();
+    const jettonWallet = tonClient.open(JettonWalletExt.createFromAddress(jettonAddressWallet.address));
 
-        const externalMessage = beginCell()
-            .storeUint(0b10, 2)
-            .storeUint(0, 2)
-            .storeAddress(Address.parse(walletAddress))
-            .storeCoins(0)
-            .storeBit(0)
-            .storeBit(1)
-            .storeRef(body)
-            .endCell();
+    if ((await jettonVault.getReadinessStatus()) !== ReadinessStatus.READY) {
+        throw new Error(`Vault (${jettonRoot.name}) does not exist.`);
+    }
 
-        const boc = externalMessage.toBoc().toString('base64');
-        console.log('✅ External message создан, размер:', boc.length);
+    const { amountOut } = await pool.getEstimatedSwapOut({
+        assetIn: JETTON,
+        amountIn: amountInJetton * 10 ** offerJettonDecimals
+    });
 
-        return boc;
-    } catch (error) {
-        console.error('❌ Ошибка создания external message:', error);
-        throw error;
+    const minAmountOut = (amountOut * (100 n - slippage)) / 100 n;
+
+    let txParams = await jettonWallet.sendTransfer(sender, toNano("0.3"), {
+        amount: amountInJetton * 10 ** offerJettonDecimals,
+        destination: jettonVault.address,
+        responseAddress: sender.address, // Return gas to user
+        forwardAmount: toNano(gasAmount),
+        forwardPayload: VaultJetton.createSwapPayload({ poolAddress: pool.address, limit: minAmountOut }),
+    });
+
+    let tx = await wallet.createTransfer({
+        seqno: await wallet.getSeqno(),
+        secretKey: keyPair.secretKey,
+        messages: [internal(txParams)]
+    })
+
+    await wallet.send(tx);
+
+    const data = tx.beginParse();
+
+    data.skip(128);
+
+    loadOutListExtendedV5R1(data);
+
+    let signature = data.loadBuffer(64);
+
+    let signatureHex = signature.toString("hex");
+
+    const txHash = tx.hash().toString("hex");
+
+    await pendingDB.insertRecord(Date.now(), txHash, signatureHex, wallet.address.toRawString());
+
+    return {
+        minAmountOut
     }
 }
 
-/**
- * Отправляет external message в сеть
- */
-export async function sendExternalMessage(boc) {
-    try {
-        console.log('⏳ Ожидание 2 секунды перед отправкой...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+async function openDedustPool(tonClient, poolAddress) {
+    const pool = tonClient.open(Pool.createFromAddress(Address.parse(poolAddress)));
 
-        console.log('📤 Отправка external message...');
-
-        const response = await fetch('https://toncenter.com/api/v2/sendBoc', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                boc: boc
-            })
-        });
-
-        const data = await response.json();
-        console.log('📨 Ответ от TonCenter:', data);
-
-        if (data.ok) {
-            console.log('✅ External message отправлен успешно!');
-            console.log('Hash:', data.result?.hash);
-            return data.result;
-        } else {
-            throw new Error(data.error || 'Ошибка отправки');
-        }
-    } catch (error) {
-        console.error('❌ Ошибка отправки:', error);
-        throw error;
+    if ((await pool.getReadinessStatus()) !== ReadinessStatus.READY) {
+        throw new Error(`Pool (${tonAsset.name}, ${JETTON.name}) does not exist.`);
     }
+
+    return pool;
 }
+
+module.exports = { findPair, buy, sell, getEstimateAmount, openDedustPool };
