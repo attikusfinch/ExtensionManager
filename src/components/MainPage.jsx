@@ -69,7 +69,7 @@ const translations = {
 };
 
 export const MainPage = () => {
-  const [address, setAddress] = useState('UQCQKEJl-yQU6Ly2JN0OGiUCM3wdL20KrwOy6bbH3Pya5WhP');
+  const [address, setAddress] = useState('');
   const [pluginList, setPluginList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
