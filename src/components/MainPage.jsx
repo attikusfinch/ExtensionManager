@@ -3,6 +3,71 @@ import { TonClient, Address } from '@ton/ton';
 import { createInstallPluginExternalMessage, createRemovePluginExternalMessage, sendExternalMessage } from '../utils/externalMessage';
 import './MainPage.css';
 
+const translations = {
+  ru: {
+    title: 'Plugin Manager',
+    testParsing: '🧪 Тест парсинга плагинов',
+    walletAddress: 'Адрес кошелька:',
+    getPlugins: 'Получить список плагинов',
+    installPlugin: 'Установить плагин',
+    loading: 'Загрузка...',
+    consoleHint: 'Откройте консоль браузера (F12) чтобы увидеть подробные логи парсинга',
+    noPlugins: 'Плагины не найдены',
+    enterAddress: 'Введите адрес и нажмите кнопку',
+    found: 'Найдено плагинов:',
+    plugin: 'Плагин',
+    friendly: 'Friendly:',
+    raw: 'Raw:',
+    workchain: 'Workchain:',
+    hash: 'Hash:',
+    installTitle: 'Установка плагина',
+    pluginAddress: 'Адрес плагина:',
+    seedPhrase: 'Seed фраза (24 слова):',
+    seedNotSaved: 'Seed фраза не сохраняется',
+    opInstall: 'External message с op=2 (install plugin)',
+    opRemove: 'External message с op=3 (remove plugin)',
+    amount: 'Amount: 0.05 TON на плагин',
+    cancel: 'Отмена',
+    install: 'Установить',
+    installing: 'Установка...',
+    removeTitle: 'Удаление плагина',
+    remove: 'Удалить плагин',
+    removing: 'Удаление...',
+    madeBy: 'Сделано'
+  },
+  en: {
+    title: 'Plugin Manager',
+    testParsing: '🧪 Test Plugin Parsing',
+    walletAddress: 'Wallet Address:',
+    getPlugins: 'Get Plugin List',
+    installPlugin: 'Install Plugin',
+    loading: 'Loading...',
+    consoleHint: 'Open browser console (F12) to see detailed parsing logs',
+    noPlugins: 'No plugins found',
+    enterAddress: 'Enter address and click button',
+    found: 'Plugins found:',
+    plugin: 'Plugin',
+    friendly: 'Friendly:',
+    raw: 'Raw:',
+    workchain: 'Workchain:',
+    hash: 'Hash:',
+    installTitle: 'Install Plugin',
+    pluginAddress: 'Plugin Address:',
+    seedPhrase: 'Seed Phrase (24 words):',
+    seedNotSaved: 'Seed phrase is not saved',
+    opInstall: 'External message with op=2 (install plugin)',
+    opRemove: 'External message with op=3 (remove plugin)',
+    amount: 'Amount: 0.05 TON to plugin',
+    cancel: 'Cancel',
+    install: 'Install',
+    installing: 'Installing...',
+    removeTitle: 'Remove Plugin',
+    remove: 'Remove Plugin',
+    removing: 'Removing...',
+    madeBy: 'Made by'
+  }
+};
+
 export const MainPage = () => {
   const [address, setAddress] = useState('UQCQKEJl-yQU6Ly2JN0OGiUCM3wdL20KrwOy6bbH3Pya5WhP');
   const [pluginList, setPluginList] = useState([]);
@@ -13,6 +78,9 @@ export const MainPage = () => {
   const [selectedPlugin, setSelectedPlugin] = useState(null);
   const [showInstallPlugin, setShowInstallPlugin] = useState(false);
   const [newPluginAddress, setNewPluginAddress] = useState('');
+  const [lang, setLang] = useState('ru');
+
+  const t = translations[lang];
 
   const fetchPlugins = async () => {
     if (!address.trim()) {
@@ -249,27 +317,32 @@ export const MainPage = () => {
     <div className="main-container">
       <div className="header">
         <div className="logo">
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <circle cx="20" cy="20" r="20" fill="url(#gradient)" />
-            <path d="M20 10L30 18V32L20 24L10 32V18L20 10Z" fill="white" />
-            <defs>
-              <linearGradient id="gradient" x1="0" y1="0" x2="40" y2="40">
-                <stop stopColor="#0088CC" />
-                <stop offset="1" stopColor="#00C6FF" />
-              </linearGradient>
-            </defs>
-          </svg>
-          <h1>Extension Manager</h1>
+          <img src="user.jpg" alt="Avatar" className="logo-avatar" />
+          <h1>{t.title}</h1>
+        </div>
+        <div className="lang-switcher">
+          <button
+            className={lang === 'ru' ? 'active' : ''}
+            onClick={() => setLang('ru')}
+          >
+            RU
+          </button>
+          <button
+            className={lang === 'en' ? 'active' : ''}
+            onClick={() => setLang('en')}
+          >
+            EN
+          </button>
         </div>
       </div>
 
       <div className="content">
         <div className="test-section">
           <div className="test-card">
-            <h2>🧪 Тест парсинга плагинов</h2>
+            <h2>{t.testParsing}</h2>
 
             <div className="input-group">
-              <label>Адрес кошелька:</label>
+              <label>{t.walletAddress}</label>
               <input
                 type="text"
                 value={address}
@@ -285,7 +358,7 @@ export const MainPage = () => {
                 onClick={fetchPlugins}
                 disabled={loading}
               >
-                {loading ? '⏳ Загрузка...' : '🔍 Получить список плагинов'}
+                {loading ? `⏳ ${t.loading}` : `🔍 ${t.getPlugins}`}
               </button>
 
               <button
@@ -293,12 +366,12 @@ export const MainPage = () => {
                 onClick={handleInstallPlugin}
                 disabled={loading}
               >
-                ➕ Установить плагин
+                ➕ {t.installPlugin}
               </button>
             </div>
 
             <div className="info-hint">
-              💡 Откройте консоль браузера (F12) чтобы увидеть подробные логи парсинга
+              💡 {t.consoleHint}
             </div>
 
             {error && (
@@ -311,24 +384,24 @@ export const MainPage = () => {
             {!loading && !error && pluginList.length === 0 && (
               <div className="empty-state">
                 <div className="empty-icon">📭</div>
-                <p>Плагины не найдены</p>
+                <p>{t.noPlugins}</p>
                 <span className="empty-hint">
-                  Введите адрес и нажмите кнопку
+                  {t.enterAddress}
                 </span>
               </div>
             )}
 
             {!loading && !error && pluginList.length > 0 && (
               <div className="plugins-list">
-                <h3>✅ Найдено плагинов: {pluginList.length}</h3>
+                <h3>✅ {t.found} {pluginList.length}</h3>
                 {pluginList.map((plugin, index) => (
                   <div key={plugin.id || index} className="plugin-item">
                     <div className="plugin-icon">🧩</div>
                     <div className="plugin-info">
-                      <h4>Плагин #{index + 1}</h4>
+                      <h4>{t.plugin} #{index + 1}</h4>
                       <div className="plugin-details">
                         <div className="plugin-field">
-                          <label>Friendly:</label>
+                          <label>{t.friendly}</label>
                           <code className="plugin-address">{plugin.friendlyAddress}</code>
                           <button
                             className="copy-btn-small"
@@ -341,15 +414,15 @@ export const MainPage = () => {
                           </button>
                         </div>
                         <div className="plugin-field">
-                          <label>Raw:</label>
+                          <label>{t.raw}</label>
                           <code className="plugin-address">{plugin.fullAddress}</code>
                         </div>
                         <div className="plugin-field">
-                          <label>Workchain:</label>
+                          <label>{t.workchain}</label>
                           <span>{plugin.workchain}</span>
                         </div>
                         <div className="plugin-field">
-                          <label>Hash:</label>
+                          <label>{t.hash}</label>
                           <code style={{ fontSize: '0.75rem' }}>{plugin.addressHash}</code>
                         </div>
                       </div>
@@ -375,7 +448,7 @@ export const MainPage = () => {
         <div className="modal-overlay" onClick={() => setShowInstallPlugin(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>➕ Установка плагина</h3>
+              <h3>➕ {t.installTitle}</h3>
               <button
                 className="modal-close"
                 onClick={() => {
@@ -388,7 +461,7 @@ export const MainPage = () => {
               </button>
             </div>
             <div className="modal-body">
-              <label>Адрес плагина:</label>
+              <label>{t.pluginAddress}</label>
               <input
                 type="text"
                 className="mnemonic-input"
@@ -398,7 +471,7 @@ export const MainPage = () => {
                 disabled={loading}
               />
 
-              <label style={{ marginTop: '1rem' }}>Seed фраза (24 слова):</label>
+              <label style={{ marginTop: '1rem' }}>{t.seedPhrase}</label>
               <textarea
                 className="mnemonic-input"
                 placeholder="word1 word2 word3 ..."
@@ -408,9 +481,9 @@ export const MainPage = () => {
                 rows="3"
               />
               <div className="modal-info">
-                <p>⚠️ Seed фраза не сохраняется</p>
-                <p>🔐 External message с op=2 (install plugin)</p>
-                <p>💰 Amount: 0.05 TON на плагин</p>
+                <p>⚠️ {t.seedNotSaved}</p>
+                <p>🔐 {t.opInstall}</p>
+                <p>💰 {t.amount}</p>
               </div>
             </div>
             <div className="modal-footer">
@@ -423,14 +496,14 @@ export const MainPage = () => {
                 }}
                 disabled={loading}
               >
-                Отмена
+                {t.cancel}
               </button>
               <button
                 className="modal-btn confirm"
                 onClick={confirmInstallPlugin}
                 disabled={loading || !mnemonic.trim() || !newPluginAddress.trim()}
               >
-                {loading ? 'Установка...' : '➕ Установить'}
+                {loading ? t.installing : `➕ ${t.install}`}
               </button>
             </div>
           </div>
@@ -442,7 +515,7 @@ export const MainPage = () => {
         <div className="modal-overlay" onClick={() => setShowMnemonicInput(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>🗑️ Удаление плагина</h3>
+              <h3>🗑️ {t.removeTitle}</h3>
               <button
                 className="modal-close"
                 onClick={() => {
@@ -456,9 +529,9 @@ export const MainPage = () => {
             </div>
             <div className="modal-body">
               <p className="modal-description">
-                Плагин: <code>{selectedPlugin.friendlyAddress}</code>
+                {t.plugin}: <code>{selectedPlugin.friendlyAddress}</code>
               </p>
-              <label>Seed фраза (24 слова):</label>
+              <label>{t.seedPhrase}</label>
               <textarea
                 className="mnemonic-input"
                 placeholder="word1 word2 word3 ..."
@@ -468,8 +541,8 @@ export const MainPage = () => {
                 rows="3"
               />
               <div className="modal-info">
-                <p>⚠️ Seed фраза не сохраняется и используется только для подписи</p>
-                <p>🔐 Будет создано и отправлено external message с op=3</p>
+                <p>⚠️ {t.seedNotSaved}</p>
+                <p>🔐 {t.opRemove}</p>
               </div>
             </div>
             <div className="modal-footer">
@@ -482,14 +555,14 @@ export const MainPage = () => {
                 }}
                 disabled={loading}
               >
-                Отмена
+                {t.cancel}
               </button>
               <button
                 className="modal-btn confirm"
                 onClick={confirmRemovePlugin}
                 disabled={loading || !mnemonic.trim()}
               >
-                {loading ? 'Удаление...' : '🗑️ Удалить плагин'}
+                {loading ? t.removing : `🗑️ ${t.remove}`}
               </button>
             </div>
           </div>
@@ -497,7 +570,7 @@ export const MainPage = () => {
       )}
 
       <footer className="footer">
-        <p>Сделано <a href="https://t.me/fiscaldev" target="_blank" rel="noopener noreferrer">@fiscaldev</a></p>
+        <p>{t.madeBy} <a href="https://t.me/fiscaldev" target="_blank" rel="noopener noreferrer">@fiscaldev</a></p>
       </footer>
     </div>
   );

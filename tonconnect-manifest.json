@@ -1,6 +1,6 @@
 {
     "url": "https://attikusfinch.github.io/ExtensionManager/",
-    "name": "Extension Manager",
+    "name": "Plugin Manager",
     "iconUrl": "https://raw.githubusercontent.com/attikusfinch/ExtensionManager/main/mod.logo.png",
     "termsOfUseUrl": "https://ton-connect.github.io/demo-dapp-with-backend/terms-of-use.txt",
     "privacyPolicyUrl": "https://ton-connect.github.io/demo-dapp-with-backend/privacy-policy.txt"
