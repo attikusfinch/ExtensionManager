@@ -1,6 +1,6 @@
 import { beginCell, Address } from '@ton/ton';
 
-export function createInstallPluginPayload(pluginAddress, amount = 50000000 n, queryId = 0 n) {
+export function createInstallPluginPayload(pluginAddress, amount = 50000000n, queryId = 0n) {
     try {
         const addr = Address.parse(pluginAddress);
         const wc = addr.workChain;
@@ -21,7 +21,7 @@ export function createInstallPluginPayload(pluginAddress, amount = 50000000 n, q
     }
 }
 
-export function createRemovePluginPayload(pluginAddress, amount = 10000000 n, queryId = 0 n) {
+export function createRemovePluginPayload(pluginAddress, amount = 10000000n, queryId = 0n) {
     try {
         const addr = Address.parse(pluginAddress);
         const wc = addr.workChain;
