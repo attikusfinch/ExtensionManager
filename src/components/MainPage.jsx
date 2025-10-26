@@ -65,25 +65,49 @@ export const MainPage = () => {
             const innerTuple = firstItem.items[0];
             console.log('📦 INNER TUPLE:');
             console.log(innerTuple);
+            console.log('Is Array?', Array.isArray(innerTuple));
             console.log('Type:', innerTuple.type);
             console.log('');
 
-            if (innerTuple.type === 'null') {
-                console.log('✓ Плагинов нет (type: null)');
-                setPluginList([]);
-                return;
-            }
+            // Если innerTuple - это сразу массив [wc, addr] одного плагина
+            if (Array.isArray(innerTuple) && innerTuple.length >= 2) {
+                console.log('🧩 Это один плагин (массив [wc, addr])');
+                console.log('  ├─ [0] (wc):', innerTuple[0]);
+                console.log('  └─ [1] (addr):', innerTuple[1]);
 
-            // Теперь проверяем items внутреннего tuple
-            if (innerTuple.type === 'tuple' && innerTuple.items) {
-                console.log('📦 Плагины найдены! Элементов:', innerTuple.items.length);
+                const wc = Number(innerTuple[0]);
+                const addrHash = BigInt(innerTuple[1]);
+
+                const pluginAddress = `${wc}:${addrHash.toString(16).padStart(64, '0')}`;
+
+                console.log('  ✓ Workchain:', wc);
+                console.log('  ✓ Address hash:', addrHash.toString(16).padStart(64, '0'));
+                console.log('  ✓ Raw address:', pluginAddress);
+
+                try {
+                    const friendly = Address.parseRaw(pluginAddress).toString();
+                    console.log('  ✓ Friendly address:', friendly);
+
+                    plugins.push({
+                        id: 0,
+                        workchain: wc,
+                        addressHash: addrHash.toString(16).padStart(64, '0'),
+                        fullAddress: pluginAddress,
+                        friendlyAddress: friendly
+                    });
+                } catch (e) {
+                    console.error('  ❌ Ошибка парсинга адреса:', e);
+                }
+            }
+            // Если innerTuple - это объект с items (несколько плагинов)
+            else if (innerTuple.type === 'tuple' && innerTuple.items) {
+                console.log('📦 Несколько плагинов! Элементов:', innerTuple.items.length);
                 console.log('');
 
                 innerTuple.items.forEach((pair, i) => {
                     console.log(`🧩 Плагин #${i}:`);
                     console.log('  Full object:', pair);
 
-                    // Каждый элемент - это массив [wc, addr]
                     if (Array.isArray(pair) && pair.length >= 2) {
                         console.log('  ├─ [0] (wc):', pair[0]);
                         console.log('  └─ [1] (addr):', pair[1]);
