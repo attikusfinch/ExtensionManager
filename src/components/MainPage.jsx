@@ -6,7 +6,7 @@ import './MainPage.css';
 const translations = {
   ru: {
     title: 'Plugin Manager',
-    testParsing: '🧪 Тест парсинга плагинов',
+    testParsing: 'Управление плагинами',
     walletAddress: 'Адрес кошелька:',
     getPlugins: 'Получить список плагинов',
     installPlugin: 'Установить плагин',
@@ -37,7 +37,7 @@ const translations = {
   },
   en: {
     title: 'Plugin Manager',
-    testParsing: '🧪 Test Plugin Parsing',
+    testParsing: 'Plugin Management',
     walletAddress: 'Wallet Address:',
     getPlugins: 'Get Plugin List',
     installPlugin: 'Install Plugin',
