@@ -4,7 +4,7 @@ import './App.css';
 
 function App() {
     return (
-        <TonConnectUIProvider manifestUrl="https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/ExtensionManager/main/tonconnect-manifest.json">
+        <TonConnectUIProvider manifestUrl="https://raw.githubusercontent.com/attikusfinch/ExtensionManager/main/tonconnect-manifest.json">
             <MainPage />
         </TonConnectUIProvider>
     );

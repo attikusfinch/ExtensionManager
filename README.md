@@ -99,6 +99,34 @@ await client.runMethod(address, 'get_plugin_list');
 - Добавьте новые функции в `src/components/MainPage.jsx`
 - Настройте логотип и название в `src/components/MainPage.jsx`
 
+## 🚀 Деплой на GitHub Pages
+
+**Перед деплоем замените `YOUR_GITHUB_USERNAME` на ваш GitHub username в:**
+- `tonconnect-manifest.json`
+- `src/App.jsx`
+
+Подробная инструкция в файле [QUICK_START.md](QUICK_START.md)
+
+### Быстрый деплой:
+
+```bash
+# 1. Замените YOUR_GITHUB_USERNAME в файлах выше
+# 2. Инициализируйте git и запушьте на GitHub
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M main
+git remote add origin https://github.com/YOUR_GITHUB_USERNAME/ExtensionManager.git
+git push -u origin main
+```
+
+3. Включите GitHub Pages в настройках репозитория (Settings → Pages → Source: GitHub Actions)
+
+После деплоя приложение будет доступно по адресу:
+```
+https://YOUR_GITHUB_USERNAME.github.io/ExtensionManager/
+```
+
 ## 📄 Лицензия
 
 MIT
