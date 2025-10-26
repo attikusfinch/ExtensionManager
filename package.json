@@ -16,7 +16,6 @@
         "buffer": "^6.0.3",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
-        "tonweb-mnemonic": "^1.0.1",
         "vite-plugin-node-polyfills": "^0.24.0"
     },
     "devDependencies": {
