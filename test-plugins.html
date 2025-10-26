@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Plugin Parser</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #fff;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        button {
+            background: #0088cc;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        
+        button:hover {
+            background: #006699;
+        }
+        
+        pre {
+            background: #2d2d2d;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .success {
+            color: #4ade80;
+        }
+        
+        .error {
+            color: #f87171;
+        }
+        
+        .info {
+            color: #60a5fa;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🧪 Test Plugin List Parser</h1>
+
+        <div>
+            <label>Адрес кошелька:</label><br>
+            <input type="text" id="address" value="UQCQKEJl-yQU6Ly2JN0OGiUCM3wdL20KrwOy6bbH3Pya5WhP" style="width: 100%; padding: 10px; margin: 10px 0;">
+        </div>
+
+        <button onclick="testGetPluginList()">🔍 Получить список плагинов</button>
+
+        <div id="output"></div>
+    </div>
+
+    <script type="module">
+        import { TonClient, Address } from 'https://cdn.jsdelivr.net/npm/@ton/ton@13.11.2/+esm'; window.testGetPluginList = async function() { const output = document.getElementById('output'); const addressInput = document.getElementById('address').value; output.innerHTML
+        = '<pre class="info">⏳ Загрузка...</pre>'; try { const client = new TonClient({ endpoint: 'https://toncenter.com/api/v2/jsonRPC' }); const addr = Address.parse(addressInput); output.innerHTML += '<pre class="info">📍 Адрес: ' + addr.toString() + '</pre>';
+        output.innerHTML += '<pre class="info">📡 Вызов get_plugin_list...</pre>'; const result = await client.runMethod(addr, 'get_plugin_list'); output.innerHTML += '<pre class="success">✅ Метод выполнен успешно!</pre>'; output.innerHTML += '
+        <h3>📊 Результат:</h3>'; output.innerHTML += '<pre>' + JSON.stringify(result, null, 2) + '</pre>'; output.innerHTML += '
+        <h3>📋 Stack Items:</h3>'; output.innerHTML += '<pre>' + JSON.stringify(result.stack.items, null, 2) + '</pre>'; if (result.stack.items && result.stack.items.length > 0) { const firstItem = result.stack.items[0]; output.innerHTML += '
+        <h3>🔍 Первый элемент:</h3>'; output.innerHTML += '<pre>' + JSON.stringify(firstItem, null, 2) + '</pre>'; if (firstItem.type === 'tuple' && firstItem.items) { output.innerHTML += '
+        <h3>🧩 Плагины в tuple:</h3>'; firstItem.items.forEach((item, i) => { output.innerHTML += '
+        <h4>Плагин #' + i + ':</h4>'; output.innerHTML += '<pre>' + JSON.stringify(item, null, 2) + '</pre>'; }); } } } catch (error) { output.innerHTML += '<pre class="error">❌ Ошибка: ' + error.message + '</pre>'; output.innerHTML += '<pre class="error">' + error.stack + '</pre>';
+        } };
+    </script>
+</body>
+
+</html>

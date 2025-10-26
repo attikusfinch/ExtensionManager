@@ -28,38 +28,54 @@ export async function getPluginList(address, client) {
         const addr = Address.parse(address);
         const result = await client.runMethod(addr, 'get_plugin_list');
 
-        console.log('🔍 get_plugin_list result:', result);
-        console.log('📋 Items:', result.stack.items);
+        console.log('═══════════════════════════════════════');
+        console.log('🔍 RAW RESULT:');
+        console.log(result);
+        console.log('');
+        console.log('📦 STACK:');
+        console.log(result.stack);
+        console.log('');
+        console.log('📋 ITEMS:');
+        console.log(result.stack.items);
+        console.log('');
 
         const plugins = [];
 
-        // Проверяем есть ли данные
         if (!result.stack.items || result.stack.items.length === 0) {
+            console.log('⚠️ Items пустые');
             return [];
         }
 
         const firstItem = result.stack.items[0];
-        console.log('First item:', firstItem);
+        console.log('🎯 FIRST ITEM:');
+        console.log(firstItem);
+        console.log('Type:', firstItem.type);
+        console.log('');
 
-        // Если null - плагинов нет
         if (firstItem.type === 'null') {
             console.log('✓ Плагинов нет (null)');
             return [];
         }
 
-        // Если tuple - парсим плагины
         if (firstItem.type === 'tuple' && firstItem.items) {
-            console.log('📦 Found tuple with', firstItem.items.length, 'items');
+            console.log('📦 TUPLE найден! Элементов:', firstItem.items.length);
+            console.log('');
 
-            for (let i = 0; i < firstItem.items.length; i++) {
-                const pair = firstItem.items[i];
-                console.log(`  Plugin ${i}:`, pair);
+            firstItem.items.forEach((pair, i) => {
+                console.log(`🧩 Плагин #${i}:`);
+                console.log('  Type:', pair.type);
+                console.log('  Full:', pair);
 
                 if (pair.type === 'tuple' && pair.items && pair.items.length >= 2) {
+                    console.log('  ├─ Item 0 (wc):', pair.items[0]);
+                    console.log('  └─ Item 1 (addr):', pair.items[1]);
+
                     const wc = Number(pair.items[0].value);
                     const addrHash = BigInt(pair.items[1].value);
 
                     const pluginAddress = `${wc}:${addrHash.toString(16).padStart(64, '0')}`;
+
+                    console.log('  ✓ Parsed:', pluginAddress);
 
                     plugins.push({
                         id: i,
@@ -69,13 +85,17 @@ export async function getPluginList(address, client) {
                         friendlyAddress: Address.parseRaw(pluginAddress).toString()
                     });
                 }
-            }
+            });
         }
 
-        console.log('✅ Parsed plugins:', plugins);
+        console.log('');
+        console.log('✅ ИТОГО ПЛАГИНОВ:', plugins.length);
+        console.log(plugins);
+        console.log('═══════════════════════════════════════');
+
         return plugins;
     } catch (error) {
-        console.error('Ошибка получения списка плагинов:', error);
+        console.error('❌ Ошибка получения списка плагинов:', error);
         throw error;
     }
 }
