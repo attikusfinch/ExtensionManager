@@ -198,6 +198,9 @@ export async function createRemovePluginExternalMessage(
  */
 export async function sendExternalMessage(boc) {
     try {
+        console.log('⏳ Ожидание 2 секунды перед отправкой...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
         console.log('📤 Отправка external message...');
 
         const response = await fetch('https://toncenter.com/api/v2/sendBoc', {
