@@ -122,10 +122,16 @@
     color: rgba(255, 255, 255, 0.4);
 }
 
-.test-button {
+.button-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.test-button,
+.install-button {
     width: 100%;
-    background: linear-gradient(135deg, #0088CC 0%, #00C6FF 100%);
-    color: white;
     border: none;
     padding: 1rem 2rem;
     border-radius: 12px;
@@ -133,8 +139,12 @@
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
+}
+
+.test-button {
+    background: linear-gradient(135deg, #0088CC 0%, #00C6FF 100%);
+    color: white;
     box-shadow: 0 4px 15px rgba(0, 136, 204, 0.4);
-    margin-bottom: 1rem;
 }
 
 .test-button:hover:not(:disabled) {
@@ -142,7 +152,19 @@
     box-shadow: 0 6px 20px rgba(0, 136, 204, 0.6);
 }
 
-.test-button:disabled {
+.install-button {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+}
+
+.install-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
+}
+
+.test-button:disabled,
+.install-button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
 }
@@ -606,7 +628,9 @@
     cursor: not-allowed;
 }
 
+
 /* Модальное окно */
+
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -780,6 +804,17 @@
         flex-direction: column;
         gap: 1rem;
     }
+    .test-card {
+        padding: 1.5rem;
+    }
+    .button-group {
+        grid-template-columns: 1fr;
+    }
+    .test-button,
+    .install-button {
+        font-size: 1rem;
+        padding: 0.85rem 1.5rem;
+    }
     .welcome-section h2 {
         font-size: 2rem;
     }
@@ -803,5 +838,5 @@
         flex-direction: column;
     }
 }
-  
- 
+
+   
