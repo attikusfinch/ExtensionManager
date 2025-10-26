@@ -1,16 +1,24 @@
-import { TonConnectButton, useTonAddress, useTonWallet } from '@tonconnect/ui-react';
+import { TonConnectButton, useTonAddress, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
 import { useState, useEffect } from 'react';
-import { TonClient, Address } from '@ton/ton';
-import { parsePluginListAsCell } from '../utils/parsePluginList';
+import { TonClient } from '@ton/ton';
+import { detectWalletVersion, getPluginList } from '../utils/walletDetector';
+import { createInstallPluginPayload, createRemovePluginPayload, createPluginTransaction } from '../utils/pluginTransactions';
+import { deployPredefinedPlugin } from '../utils/pluginDeploy';
 import './MainPage.css';
 
 export const MainPage = () => {
     const userFriendlyAddress = useTonAddress();
     const rawAddress = useTonAddress(false);
     const wallet = useTonWallet();
+    const [tonConnectUI] = useTonConnectUI();
     const [pluginList, setPluginList] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [walletInfo, setWalletInfo] = useState(null);
+    const [newPluginAddress, setNewPluginAddress] = useState('');
+    const [showAddPlugin, setShowAddPlugin] = useState(false);
+    const [showDeployPlugin, setShowDeployPlugin] = useState(false);
+    const [txLoading, setTxLoading] = useState(false);
 
     useEffect(() => {
         const fetchPluginList = async () => {
@@ -24,33 +32,33 @@ export const MainPage = () => {
             setError(null);
 
             try {
-                console.log('Получение списка плагинов для адреса:', rawAddress);
+                console.log('Получение информации о кошельке:', rawAddress);
 
                 // Создаем клиент для mainnet
                 const client = new TonClient({
                     endpoint: 'https://toncenter.com/api/v2/jsonRPC',
-                    // API ключ опционален, но увеличивает лимиты запросов
-                    // Получить можно на https://toncenter.com
                 });
 
-                // Парсим адрес
-                const address = Address.parse(rawAddress);
+                // Детектируем версию кошелька
+                const walletVersion = await detectWalletVersion(rawAddress, client);
+                setWalletInfo(walletVersion);
+                console.log('Версия кошелька:', walletVersion);
 
-                // Вызываем get-метод get_plugin_list
-                console.log('Вызов get-метода get_plugin_list...');
-                const result = await client.runMethod(address, 'get_plugin_list');
+                if (!walletVersion.supportsPlugins) {
+                    setError('Этот кошелек не поддерживает плагины. Требуется кошелек v4 с поддержкой плагинов.');
+                    setPluginList([]);
+                    return;
+                }
 
-                console.log('Результат get-метода:', result);
-
-                // Парсим результат используя утилиту
-                // Измените parsePluginListAsCell на нужный парсер из src/utils/parsePluginList.js
-                const plugins = parsePluginListAsCell(result.stack);
+                // Получаем список плагинов
+                console.log('Получение списка плагинов...');
+                const plugins = await getPluginList(rawAddress, client);
 
                 setPluginList(plugins);
-                console.log('Распарсенные плагины:', plugins);
+                console.log('Список плагинов:', plugins);
 
                 if (plugins.length === 0) {
-                    setError('Get-метод вернул пустой результат. Возможно, плагины отсутствуют или требуется другой парсер.');
+                    setError(null); // Нет ошибки, просто нет плагинов
                 }
             } catch (err) {
                 console.error('Ошибка при получении списка плагинов:', err);
@@ -58,7 +66,7 @@ export const MainPage = () => {
                 let errorMessage = 'Не удалось получить список плагинов';
 
                 if (err.message.includes('exit_code')) {
-                    errorMessage = 'Get-метод get_plugin_list не найден в смарт-контракте';
+                    errorMessage = 'Get-метод get_plugin_list не найден. Возможно, это не v4 кошелек с плагинами.';
                 } else if (err.message.includes('network')) {
                     errorMessage = 'Ошибка сети. Проверьте подключение к интернету';
                 } else if (err.message) {
@@ -67,6 +75,7 @@ export const MainPage = () => {
 
                 setError(errorMessage);
                 setPluginList([]);
+                setWalletInfo({ version: 'unknown', supportsPlugins: false });
             } finally {
                 setLoading(false);
             }
@@ -74,6 +83,88 @@ export const MainPage = () => {
 
         fetchPluginList();
     }, [rawAddress]);
+
+    // Функция установки плагина
+    const handleInstallPlugin = async () => {
+        if (!newPluginAddress.trim()) {
+            alert('Введите адрес плагина');
+            return;
+        }
+
+        setTxLoading(true);
+        try {
+            const payload = createInstallPluginPayload(newPluginAddress);
+            const transaction = createPluginTransaction(userFriendlyAddress, payload, '0.05');
+
+            await tonConnectUI.sendTransaction(transaction);
+
+            alert('Транзакция отправлена! Плагин будет установлен после подтверждения.');
+            setNewPluginAddress('');
+            setShowAddPlugin(false);
+
+            // Обновляем список через 3 секунды
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+        } catch (error) {
+            console.error('Ошибка установки плагина:', error);
+            alert('Ошибка: ' + error.message);
+        } finally {
+            setTxLoading(false);
+        }
+    };
+
+    // Функция удаления плагина
+    const handleRemovePlugin = async (pluginAddress) => {
+        if (!confirm(`Удалить плагин ${pluginAddress}?`)) {
+            return;
+        }
+
+        setTxLoading(true);
+        try {
+            const payload = createRemovePluginPayload(pluginAddress);
+            const transaction = createPluginTransaction(userFriendlyAddress, payload, '0.01');
+
+            await tonConnectUI.sendTransaction(transaction);
+
+            alert('Транзакция отправлена! Плагин будет удален после подтверждения.');
+
+            // Обновляем список через 3 секунды
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+        } catch (error) {
+            console.error('Ошибка удаления плагина:', error);
+            alert('Ошибка: ' + error.message);
+        } finally {
+            setTxLoading(false);
+        }
+    };
+
+    // Функция деплоя нового плагина
+    const handleDeployPlugin = async () => {
+        setTxLoading(true);
+        try {
+            const { transaction, pluginAddress } = deployPredefinedPlugin(userFriendlyAddress, '0.1');
+
+            console.log('Деплой плагина на адрес:', pluginAddress);
+
+            await tonConnectUI.sendTransaction(transaction);
+
+            alert(`Транзакция отправлена!\nПлагин будет задеплоен на адрес:\n${pluginAddress}`);
+            setShowDeployPlugin(false);
+
+            // Обновляем список через 5 секунд (деплой может занять больше времени)
+            setTimeout(() => {
+                window.location.reload();
+            }, 5000);
+        } catch (error) {
+            console.error('Ошибка деплоя плагина:', error);
+            alert('Ошибка: ' + error.message);
+        } finally {
+            setTxLoading(false);
+        }
+    };
 
     return (
         <div className="main-container">
@@ -97,40 +188,16 @@ export const MainPage = () => {
             <div className="content">
                 {!wallet ? (
                     <div className="welcome-section">
-                        <div className="welcome-icon">
-                            <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="60" cy="60" r="60" fill="url(#welcomeGradient)" fillOpacity="0.1" />
-                                <circle cx="60" cy="60" r="50" fill="url(#welcomeGradient)" fillOpacity="0.2" />
-                                <path d="M60 30L80 45V75L60 60L40 75V45L60 30Z" fill="url(#welcomeGradient)" />
-                                <defs>
-                                    <linearGradient id="welcomeGradient" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
-                                        <stop stopColor="#0088CC" />
-                                        <stop offset="1" stopColor="#00C6FF" />
-                                    </linearGradient>
-                                </defs>
-                            </svg>
+                        <div className="welcome-avatar">
+                            <img src="user.jpg" alt="Developer" />
                         </div>
                         <h2>Менеджер расширений TON</h2>
                         <p className="subtitle">
                             Подключите кошелек для просмотра списка установленных плагинов
                         </p>
-                        <div className="features">
-                            <div className="feature-card">
-                                <div className="feature-icon">🔌</div>
-                                <h3>Управление плагинами</h3>
-                                <p>Просмотр списка установленных расширений</p>
-                            </div>
-                            <div className="feature-card">
-                                <div className="feature-icon">⚡</div>
-                                <h3>Get-методы</h3>
-                                <p>Прямое взаимодействие со смарт-контрактами</p>
-                            </div>
-                            <div className="feature-card">
-                                <div className="feature-icon">🔐</div>
-                                <h3>Безопасность</h3>
-                                <p>Защищенное подключение через TON Connect</p>
-                            </div>
-                        </div>
+                        <p className="developer-credit">
+                            Сделано <a href="https://t.me/fiscaldev" target="_blank" rel="noopener noreferrer">@fiscaldev</a>
+                        </p>
                     </div>
                 ) : (
                     <div className="wallet-section">
@@ -174,8 +241,37 @@ export const MainPage = () => {
                             <div className="plugins-section">
                                 <div className="section-header">
                                     <h3>🔌 Список плагинов</h3>
-                                    {loading && <div className="loader"></div>}
+                                    <div className="header-actions">
+                                        {loading && <div className="loader"></div>}
+                                        {walletInfo?.supportsPlugins && !loading && (
+                                            <>
+                                                <button
+                                                    className="deploy-plugin-btn"
+                                                    onClick={() => setShowDeployPlugin(true)}
+                                                    disabled={txLoading}
+                                                >
+                                                    🚀 Деплой
+                                                </button>
+                                                <button
+                                                    className="add-plugin-btn"
+                                                    onClick={() => setShowAddPlugin(true)}
+                                                    disabled={txLoading}
+                                                >
+                                                    ➕ Добавить
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
+
+                                {walletInfo && (
+                                    <div className="wallet-version-info">
+                                        <span className="version-badge">
+                                            {walletInfo.version}
+                                            {walletInfo.supportsPlugins && <span className="plugin-support">✓ Плагины</span>}
+                                        </span>
+                                    </div>
+                                )}
 
                                 {error && (
                                     <div className="error-message">
@@ -184,12 +280,12 @@ export const MainPage = () => {
                                     </div>
                                 )}
 
-                                {!loading && !error && pluginList.length === 0 && (
+                                {!loading && !error && pluginList.length === 0 && walletInfo?.supportsPlugins && (
                                     <div className="empty-state">
                                         <div className="empty-icon">📭</div>
-                                        <p>Плагины не найдены</p>
+                                        <p>Плагины не установлены</p>
                                         <span className="empty-hint">
-                                            Этот адрес не содержит плагинов или get-метод недоступен
+                                            Нажмите "Добавить" чтобы установить первый плагин
                                         </span>
                                     </div>
                                 )}
@@ -201,10 +297,127 @@ export const MainPage = () => {
                                                 <div className="plugin-icon">🧩</div>
                                                 <div className="plugin-info">
                                                     <h4>Плагин #{index + 1}</h4>
-                                                    <code className="plugin-data">{plugin.data}</code>
+                                                    <div className="plugin-details">
+                                                        <div className="plugin-field">
+                                                            <label>Адрес:</label>
+                                                            <code className="plugin-address">{plugin.friendlyAddress}</code>
+                                                            <button
+                                                                className="copy-btn-small"
+                                                                onClick={() => {
+                                                                    navigator.clipboard.writeText(plugin.friendlyAddress);
+                                                                    alert('Адрес скопирован!');
+                                                                }}
+                                                            >
+                                                                📋
+                                                            </button>
+                                                        </div>
+                                                        <div className="plugin-field">
+                                                            <label>Workchain:</label>
+                                                            <span>{plugin.workchain}</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
+                                                <button
+                                                    className="remove-plugin-btn"
+                                                    onClick={() => handleRemovePlugin(plugin.friendlyAddress)}
+                                                    disabled={txLoading}
+                                                    title="Удалить плагин"
+                                                >
+                                                    🗑️
+                                                </button>
                                             </div>
                                         ))}
+                                    </div>
+                                )}
+
+                                {/* Модальное окно добавления плагина */}
+                                {showAddPlugin && (
+                                    <div className="modal-overlay" onClick={() => setShowAddPlugin(false)}>
+                                        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                                            <div className="modal-header">
+                                                <h3>Добавить плагин</h3>
+                                                <button
+                                                    className="modal-close"
+                                                    onClick={() => setShowAddPlugin(false)}
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                            <div className="modal-body">
+                                                <label>Адрес плагина:</label>
+                                                <input
+                                                    type="text"
+                                                    className="plugin-input"
+                                                    placeholder="EQD... или 0:..."
+                                                    value={newPluginAddress}
+                                                    onChange={(e) => setNewPluginAddress(e.target.value)}
+                                                    disabled={txLoading}
+                                                />
+                                                <div className="modal-info">
+                                                    <p>💡 Будет отправлено ~0.05 TON</p>
+                                                    <p>ℹ️ Плагин должен быть уже задеплоен</p>
+                                                </div>
+                                            </div>
+                                            <div className="modal-footer">
+                                                <button
+                                                    className="modal-btn cancel"
+                                                    onClick={() => setShowAddPlugin(false)}
+                                                    disabled={txLoading}
+                                                >
+                                                    Отмена
+                                                </button>
+                                                <button
+                                                    className="modal-btn confirm"
+                                                    onClick={handleInstallPlugin}
+                                                    disabled={txLoading || !newPluginAddress.trim()}
+                                                >
+                                                    {txLoading ? 'Отправка...' : 'Установить'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Модальное окно деплоя плагина */}
+                                {showDeployPlugin && (
+                                    <div className="modal-overlay" onClick={() => setShowDeployPlugin(false)}>
+                                        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                                            <div className="modal-header">
+                                                <h3>Деплой и установка плагина</h3>
+                                                <button
+                                                    className="modal-close"
+                                                    onClick={() => setShowDeployPlugin(false)}
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                            <div className="modal-body">
+                                                <p className="modal-description">
+                                                    Будет задеплоен и установлен предустановленный плагин с кодом кошелька v4.
+                                                </p>
+                                                <div className="modal-info">
+                                                    <p>💰 Стоимость деплоя: ~0.1 TON</p>
+                                                    <p>📦 Bytecode: встроенный плагин</p>
+                                                    <p>⚙️ Операция: op = 1 (deploy + install)</p>
+                                                </div>
+                                            </div>
+                                            <div className="modal-footer">
+                                                <button
+                                                    className="modal-btn cancel"
+                                                    onClick={() => setShowDeployPlugin(false)}
+                                                    disabled={txLoading}
+                                                >
+                                                    Отмена
+                                                </button>
+                                                <button
+                                                    className="modal-btn confirm"
+                                                    onClick={handleDeployPlugin}
+                                                    disabled={txLoading}
+                                                >
+                                                    {txLoading ? 'Деплой...' : 'Деплой и установить'}
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
