@@ -22,7 +22,7 @@ export function createPluginData(walletAddress, beneficiaryAddress = null) {
     const data = beginCell()
         .storeAddress(wallet) // wallet:MsgAddressInt
         .storeAddress(beneficiary) // beneficiary:MsgAddressInt
-        .storeCoins(1000000000 n) // amount:Grams (1 TON - пример)
+        .storeCoins(1000000000n) // amount:Grams (1 TON - пример)
         .storeUint(2592000, 32) // period:uint32 (30 дней в секундах)
         .storeUint(Math.floor(Date.now() / 1000), 32) // start_time:uint32
         .storeUint(86400, 32) // timeout:uint32 (1 день)
