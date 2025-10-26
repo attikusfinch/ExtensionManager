@@ -51,7 +51,7 @@ export async function createInstallPluginExternalMessage(
     mnemonicWords,
     walletAddress,
     pluginAddress,
-    amount = 50000000 n
+    amount = 50000000n
 ) {
     try {
         console.log('🔐 Создание external message для установки плагина (op=2)');
@@ -129,7 +129,7 @@ export async function createRemovePluginExternalMessage(
     mnemonicWords,
     walletAddress,
     pluginAddress,
-    amount = 50000000 n
+    amount = 50000000n
 ) {
     try {
         console.log('🔐 Создание external message для удаления плагина (op=3)');
@@ -215,7 +215,7 @@ export async function sendExternalMessage(boc) {
 
         if (data.ok) {
             console.log('✅ External message отправлен успешно!');
-            console.log('Hash:', data.result ? .hash);
+            console.log('Hash:', data.result?.hash);
             return data.result;
         } else {
             throw new Error(data.error || 'Ошибка отправки');
