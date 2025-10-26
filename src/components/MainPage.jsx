@@ -147,21 +147,41 @@ export const MainPage = () => {
         try {
             const { transaction, pluginAddress } = deployPredefinedPlugin(userFriendlyAddress, '0.1');
 
-            console.log('Деплой плагина на адрес:', pluginAddress);
+            console.log('🚀 Деплой плагина на адрес:', pluginAddress);
+            console.log('📨 Отправка транзакции на деплой...');
 
             await tonConnectUI.sendTransaction(transaction);
 
-            alert(`Транзакция отправлена!\nПлагин будет задеплоен на адрес:\n${pluginAddress}`);
+            console.log('✅ Транзакция деплоя отправлена!');
+            alert(`Шаг 1/2: Деплой успешно!\n\nПлагин задеплоен на:\n${pluginAddress}\n\nТеперь нужно установить его в кошелек (op=2)`);
+
             setShowDeployPlugin(false);
 
-            // Обновляем список через 5 секунд (деплой может занять больше времени)
-            setTimeout(() => {
-                window.location.reload();
+            // Ждем 5 секунд для подтверждения деплоя, затем устанавливаем
+            console.log('⏳ Ожидание подтверждения деплоя...');
+
+            setTimeout(async () => {
+                try {
+                    console.log('📝 Шаг 2: Установка плагина (op=2)...');
+                    const installPayload = createInstallPluginPayload(pluginAddress, 50000000n, 0n);
+                    const installTx = createPluginTransaction(userFriendlyAddress, installPayload, '0.05');
+
+                    console.log('📨 Отправка транзакции на установку...');
+                    await tonConnectUI.sendTransaction(installTx);
+
+                    alert(`Шаг 2/2: Установка успешно!\n\nПлагин установлен в кошелек!`);
+
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                } catch (err) {
+                    console.error('Ошибка установки плагина:', err);
+                    alert('Деплой прошел успешно, но ошибка при установке.\nАдрес плагина: ' + pluginAddress + '\n\nУстановите вручную кнопкой "Добавить"');
+                }
             }, 5000);
         } catch (error) {
             console.error('Ошибка деплоя плагина:', error);
             alert('Ошибка: ' + error.message);
-        } finally {
             setTxLoading(false);
         }
     };
